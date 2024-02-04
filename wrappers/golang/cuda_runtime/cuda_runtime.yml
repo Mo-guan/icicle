@@ -40,13 +40,16 @@ TRANSLATOR:
       - {action: replace, from: "cudaEvent_t", to: "cudaEvent"}
       - {action: accept, from: "CUevent_st"}
       - {action: replace, from: "CUevent_st", to: "cudaEvent"}
+      - {action: accept, from: "cudaMemPool_t"}
+      - {action: replace, from: "cudaMemPool_t", to: "cudaMemPool"}
       - {transform: export}
+      # - {action: replace, from: C.struct_CUstream_st, to: CudaStream}
     function:
       # memory management
       - {action: accept, from: "^cudaFree$"}
       - {action: accept, from: "^cudaMalloc$"}
-      - {action: accept, from: "^cudaMemcpy$"}
-      - {action: accept, from: "^cudaMemcpyAsync$"}
+      # - {action: accept, from: "^cudaMemcpy$"}
+      # - {action: accept, from: "^cudaMemcpyAsync$"}
       - {action: accept, from: "^cudaMemset$"}
       - {action: accept, from: "^cudaMemsetAsync$"}
       # device management
@@ -73,8 +76,10 @@ TRANSLATOR:
       - {target: ^cudaStreamCreateWithFlags$, tips: [ref, 0]}
       - {target: "^cudaMalloc$", tips: [ref, 0]}
     any:
-      - {target: cudaStream_t, self: ref}
+      - {target: cudaStream_t, tips: [ref]}
   TypeTips:
     function:
       - {target: ^cudaStreamCreate$, tips: [named]}
+  MemTips:
+    - {target: cudaStream_t, self: raw}
       

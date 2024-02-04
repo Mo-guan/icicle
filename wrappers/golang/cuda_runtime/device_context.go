@@ -1,26 +1,26 @@
 package cuda_runtime
 
-import (
-	"local/hello/icicle/wrappers/golang/cuda_runtime/cuda_bindings"
-)
-
 type DeviceContext struct {
 	/// Stream to use. Default value: 0.
-	Stream *cuda_bindings.CudaStream // Assuming the type is provided by a CUDA binding crate
+	Stream *Stream // Assuming the type is provided by a CUDA binding crate
 
 	/// Index of the currently used GPU. Default value: 0.
 	DeviceId uint
 
 	/// Mempool to use. Default value: 0.
-	Mempool CudaMemPool // Assuming the type is provided by a CUDA binding crate
+	// TODO: use cuda_bindings.CudaMemPool as type
+	Mempool uint // Assuming the type is provided by a CUDA binding crate
 }
 
-func GetDefaultDeviceContext() DeviceContext {
-	var defaultStream cuda_bindings.CudaStream
-	defaultStream.CreateStream()
+func GetDefaultDeviceContext() (DeviceContext, CudaError) {
+	defaultStream, err := CreateStream()
+	if err != CudaSuccess {
+		return DeviceContext{}, err
+	}
+
 	return DeviceContext {
 			&defaultStream,
 			0,
 			0,
-	}
+	}, CudaSuccess
 }

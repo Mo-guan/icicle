@@ -21,11 +21,11 @@ package bn254
 // #cgo LDFLAGS: -L${SRCDIR}/../../../../icicle/build -lingo_bn254
 // #include "ve_mod_mult.h"
 import "C"
-import (
-	"fmt"
-	"unsafe"
-	cuda "local/hello/icicle/wrappers/golang/cuda_runtime"
-)
+// import (
+// 	"fmt"
+// 	"unsafe"
+// 	cuda "local/hello/icicle/wrappers/golang/cuda_runtime"
+// )
 
 // func VecScalarMulMod(scalarVec1, scalarVec2 unsafe.Pointer, size int) int {
 // 	scalarVec1C := (*C.BN254_scalar_t)(scalarVec1)
@@ -42,22 +42,22 @@ import (
 // 	return 0
 // }
 
-func VecScalarAdd(in1_d, in2_d, out_d unsafe.Pointer, ctx C.DeviceContext, size int) int {
-	in1_dC := (*C.BN254_scalar_t)(in1_d)
-	in2_dC := (*C.BN254_scalar_t)(in2_d)
-	sizeC := C.int(size)
-	onDeviceC := C.bool(true)
-	out_dC := (*C.BN254_scalar_t)(out_d)
+// func VecScalarAdd(in1_d, in2_d, out_d unsafe.Pointer, ctx C.DeviceContext, size int) int {
+// 	in1_dC := (*C.BN254_scalar_t)(in1_d)
+// 	in2_dC := (*C.BN254_scalar_t)(in2_d)
+// 	sizeC := C.int(size)
+// 	onDeviceC := C.bool(true)
+// 	out_dC := (*C.BN254_scalar_t)(out_d)
 
-	ret := C.bn254AddCuda(in1_dC, in2_dC, sizeC, onDeviceC, ctx, out_dC)
+// 	ret := C.bn254AddCuda(in1_dC, in2_dC, sizeC, onDeviceC, ctx, out_dC)
 
-	if ret != 0 {
-		fmt.Print("error adding scalar vectors")
-		return -1
-	}
+// 	if ret != 0 {
+// 		fmt.Print("error adding scalar vectors")
+// 		return -1
+// 	}
 
-	return 0
-}
+// 	return 0
+// }
 
 // func VecScalarSub(in1_d, in2_d unsafe.Pointer, size int) int {
 // 	in1_dC := (*C.BN254_scalar_t)(in1_d)

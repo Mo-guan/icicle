@@ -1,117 +1,65 @@
 package cuda_runtime
 
 import "C"
+
 import (
 	"unsafe"
-	"local/hello/icicle/wrappers/golang/cuda_runtime/cuda_bindings"
 )
 
-type HostOrDeviceSlice interface {
+type HostOrDeviceSlice[T, S any] interface {
 	Len() int
 	Cap() int
 	IsEmpty() bool
-	AsSlice() []any
-	AsPointer() *any
+	AsSlice() T
+	AsPointer() *S
 	IsOnDevice() bool
 }
 
-type DeviceSlice struct {
-	inner unsafe.Pointer
-	capacity int
-	length int
-}
-
-func (d* DeviceSlice) Len() int {
-	return d.length
-}
-
-func (d* DeviceSlice) Cap() int {
-	return d.capacity
-}
-
-func (d* DeviceSlice) IsEmpty() bool {
-	return d.length == 0
-}
-
-func (d* DeviceSlice) AsSlice() []any {
-	panic("Use CopyToHost or CopyToHostAsync to move device data to a slice")
-}
-
-func (d* DeviceSlice) AsPointer() *any {
-	return (*any)(d.inner)
-}
-
-func (d DeviceSlice) IsOnDevice() bool {
-	return true
-}
-
-type HostSlice struct {
-	inner	[]any
-}
-
-func (h* HostSlice) Len() int {
-	return len(h.inner)
-}
-
-func (h* HostSlice) Cap() int {
-	return cap(h.inner)
-}
-
-func (h* HostSlice) IsEmpty() bool {
-	return len(h.inner) == 0
-}
-
-func (h* HostSlice) AsSlice() []any {
-		return h.inner
-}
-
-func (h* HostSlice) AsPointer() *any {
-	return &h.inner[0]
-}
-
-func (h HostSlice) IsOnDevice() bool {
-	return false
-}
-
-func Malloc(size uint) (DeviceSlice, cuda_bindings.CudaErrorT) {
+func Malloc(size uint) (unsafe.Pointer, CudaError) {
 	if size == 0 {
-		return DeviceSlice{}, cuda_bindings.CudaErrorMemoryAllocation
+		return nil, CudaErrorMemoryAllocation
 	}
 
 	var p C.void
 	dp := unsafe.Pointer(&p)
-	err := cuda_bindings.CudaMalloc(&dp, size)
+	err := cudaMalloc(dp, uint64(size))
 
-	return DeviceSlice{inner: dp, capacity: int(size), length: 0}, err
+	return dp, err
 }
 
-// TODO
-func MallocAsync() {}
+func MallocAsync(size uint, stream CudaStream) (unsafe.Pointer, CudaError) {
+	if size == 0 {
+		return nil, CudaErrorMemoryAllocation
+	}
 
-func (d* DeviceSlice) Free() cuda_bindings.CudaErrorT {
-	return cuda_bindings.CudaFree(d.inner)
+	var p C.void
+	dp := unsafe.Pointer(&p)
+	err := cudaMallocAsync(dp, uint64(size), stream)
+
+	return dp, err
 }
 
-func (d* DeviceSlice) CopyToHost(dst HostSlice, size uint) HostSlice {
-	dst_c := unsafe.Pointer(&dst.inner[0])
-	cuda_bindings.CudaMemcpy(dst_c, d.inner, uint64(size), cuda_bindings.CudaMemcpyDeviceToHost)
-	return dst
+func Free(d unsafe.Pointer) CudaError {
+	return cudaFree(d)
 }
 
-func (d* DeviceSlice) CopyToHostAsync(dst HostSlice, size uint, stream cuda_bindings.CudaStream) {
-	dst_c := unsafe.Pointer(&dst.inner[0])
-	cuda_bindings.CudaMemcpyAsync(dst_c, d.inner, uint64(size), cuda_bindings.CudaMemcpyDeviceToHost, stream)
-	return
+func CopyToHost[T any](hostDst []T, deviceSrc unsafe.Pointer, size uint) (unsafe.Pointer, CudaError) {
+	cHostDst := unsafe.Pointer(&hostDst[0])
+	err := cudaMemcpy(cHostDst, deviceSrc, uint64(size), CudaMemcpyDeviceToHost)
+	return cHostDst, err
 }
 
-func (h* HostSlice) CopyFromHost(dst DeviceSlice, size uint) DeviceSlice {
-	src_c := unsafe.Pointer(&h.inner[0])
-	cuda_bindings.CudaMemcpy(dst.inner, src_c, uint64(size), cuda_bindings.CudaMemcpyHostToDevice)
-	return dst
+func CopyToHostAsync(hostDst, deviceSrc unsafe.Pointer, size uint, stream CudaStream) unsafe.Pointer {
+	cudaMemcpyAsync(hostDst, deviceSrc, int(size), CudaMemcpyDeviceToHost, stream)
+	return hostDst
 }
 
-func (h* HostSlice) CopyFromHostAsync(dst DeviceSlice, size uint, stream cuda_bindings.CudaStream) {
-	src_c := unsafe.Pointer(&h.inner[0])
-	cuda_bindings.CudaMemcpyAsync(dst.inner, src_c, uint64(size), cuda_bindings.CudaMemcpyHostToDevice, stream)
-	return
+func CopyFromHost(deviceDst, hostSrc unsafe.Pointer, size uint) (unsafe.Pointer, CudaError) {
+	err := cudaMemcpy(deviceDst, hostSrc, uint64(size), CudaMemcpyHostToDevice)
+	return deviceDst, err
+}
+
+func CopyFromHostAsync(deviceDst, hostSrc unsafe.Pointer, size uint, stream CudaStream) unsafe.Pointer {
+	cudaMemcpyAsync(deviceDst, hostSrc, int(size), CudaMemcpyHostToDevice, stream)
+	return deviceDst
 }

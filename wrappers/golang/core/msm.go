@@ -1,6 +1,7 @@
 package core
 
 import (
+    "fmt"
 	"local/hello/icicle/wrappers/golang/cuda_runtime"
 )
 
@@ -53,8 +54,52 @@ type MSMConfig struct {
     IsAsync bool
 }
 
-type MSM interface {
-	Msm(scalars []FieldInter,	points []FieldInter, cfg *MSMConfig, results []FieldInter) IcicleError
-	GetDefaultMSMConfig() MSMConfig
+// type MSM interface {
+// 	Msm(scalars, points *cuda_runtime.HostOrDeviceSlice, cfg *MSMConfig, results *cuda_runtime.HostOrDeviceSlice) cuda_runtime.CudaError
+// 	GetDefaultMSMConfig() MSMConfig
+// }
+
+func GetDefaultMSMConfig() MSMConfig {
+    ctx, _ := cuda_runtime.GetDefaultDeviceContext()
+    return MSMConfig{
+        ctx,   // Ctx
+        0,     // pointsSize
+        1,     // PrecomputeFactor
+        0,     // C
+        0,     // Bitsize
+        10,    // LargeBucketFactor
+        1,     // batchSize
+        false, // areScalarsOnDevice
+        false, // AreScalarsMontgomeryForm
+        false, // arePointsOnDevice
+        false, // ArePointsMontgomeryForm
+        false, // areResultsOnDevice
+        false, // IsBigTriangle
+        false, // IsAsync
+    }
 }
 
+func MsmCheck(scalars cuda_runtime.HostOrDeviceSlice[any, any], points cuda_runtime.HostOrDeviceSlice[any, any], cfg *MSMConfig, results cuda_runtime.HostOrDeviceSlice[any, any]) {
+    scalarsLength, pointsLength, resultsLength := scalars.Len(), points.Len(), results.Len()
+    if scalarsLength % pointsLength != 0 {
+        errorString := fmt.Sprintf(
+            "Number of points %d does not divide the number of scalars %d",
+            pointsLength,
+            scalarsLength,
+        )
+        panic(errorString)
+    }
+    if scalarsLength % resultsLength != 0 {
+        errorString := fmt.Sprintf(
+            "Number of results %d does not divide the number of scalars %d",
+            resultsLength,
+            scalarsLength,
+        )
+        panic(errorString)
+    }
+    cfg.pointsSize = int32(pointsLength)
+    cfg.batchSize = int32(resultsLength)
+    cfg.areScalarsOnDevice = scalars.IsOnDevice();
+    cfg.arePointsOnDevice = points.IsOnDevice();
+    cfg.areResultsOnDevice = results.IsOnDevice();
+}

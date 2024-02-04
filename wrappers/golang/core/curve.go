@@ -12,7 +12,7 @@ func (p* Projective) Zero() Projective {
 	return *p
 }
 
-func (p* Projective) FromLimbs(x, y, z []uint64) Projective {
+func (p* Projective) FromLimbs(x, y, z []uint32) Projective {
 	p.X.FromLimbs(x)
 	p.Y.FromLimbs(y)
 	p.Z.FromLimbs(z)
@@ -21,14 +21,15 @@ func (p* Projective) FromLimbs(x, y, z []uint64) Projective {
 }
 
 func (p* Projective) FromAffine(a Affine) Projective {
-	z := Field {
-		NumLimbs: a.X.NumLimbs,
+	z := &Field {
+		Limbs: make([]uint32, len(a.X.Limbs)),
 	}
+	z.One()
 	
 	return Projective{
 		X: a.X,
 		Y: a.Y,
-		Z: z.One(),
+		Z: *z,
 	}
 }
 
@@ -43,7 +44,7 @@ func (a* Affine) Zero() Affine {
 	return *a
 }
 
-func (a* Affine) FromLimbs(x, y []uint64) Affine {
+func (a* Affine) FromLimbs(x, y []uint32) Affine {
 	a.X.FromLimbs(x)
 	a.Y.FromLimbs(y)
 
@@ -51,13 +52,14 @@ func (a* Affine) FromLimbs(x, y []uint64) Affine {
 }
 
 func (a* Affine) ToProjective() Projective {
-	z := Field {
-		NumLimbs: a.X.NumLimbs,
+	z := &Field {
+		Limbs: make([]uint32, len(a.X.Limbs)),
 	}
+	z.One()
 	
 	return Projective{
 		X: a.X,
 		Y: a.Y,
-		Z: z.One(),
+		Z: *z,
 	}
 }

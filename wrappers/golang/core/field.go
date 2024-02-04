@@ -5,56 +5,57 @@ import (
 )
 
 type FieldInter interface {
-	GetLimbs() []uint64
-	FromLimbs(limbs []uint64) Field
-	Zero() Field
-	One() Field
+	GetLimbs() []uint32
+	FromLimbs(limbs []uint32) Field
+	Zero()
+	One()
 	FromBytesLittleEndian(bytes []byte) Field
 	ToBytesLittleEndian() []byte
 }
 
 type Field struct {
-	NumLimbs int8
-	limbs []uint64 // need to constrain this by NumLimbs
+	Limbs []uint32
 }
 
-func (f* Field) GetLimbs() []uint64 {
-	return f.limbs
+func (f* Field) Size() int {
+	return len(f.Limbs)*4
 }
 
-func (f* Field) FromLimbs(limbs []uint64) Field {
-	f.NumLimbs = int8(len(limbs))
-	f.limbs = limbs
+func (f* Field) GetLimbs() []uint32 {
+	return (f.Limbs)
+}
+
+func (f* Field) FromLimbs(limbs []uint32) Field {
+	f.Limbs = limbs
 
 	return *f
 }
 
-func (f* Field) Zero() Field {
-	f.limbs = make([]uint64, f.NumLimbs)
-
-	return *f
+func (f* Field) Zero() {
+	for i, _ := range f.Limbs {
+		f.Limbs[i] = 0
+	}
 }
 
-func (f* Field) One() Field {
-	f.limbs = make([]uint64, f.NumLimbs)
-	f.limbs[0] = 1
-
-	return *f
+func (f* Field) One() {
+	for i, _ := range f.Limbs {
+		f.Limbs[i] = 0
+	}
+	f.Limbs[0] = 1
 }
 
 func (f* Field) FromBytesLittleEndian(bytes []byte) Field {
-	limbs := make([]uint64, f.NumLimbs)
-	for i := int8(0); i < f.NumLimbs; i++ {
-		limbs[i] = binary.LittleEndian.Uint64(bytes[i:i+8])
+	for i, _ := range f.Limbs {
+		f.Limbs[i] = binary.LittleEndian.Uint32(bytes[i:i+4])
 	}
 
 	return *f
 }
 
 func (f* Field) ToBytesLittleEndian() []byte {
-	bytes := make([]byte, f.NumLimbs*8)
-	for i, v := range f.limbs {
-		binary.LittleEndian.PutUint64(bytes[i*4:], v)
+	bytes := make([]byte, len(f.Limbs)*4)
+	for i, v := range f.Limbs {
+		binary.LittleEndian.PutUint32(bytes[i*4:], v)
 	}
 
 	return bytes
