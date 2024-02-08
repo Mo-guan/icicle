@@ -276,7 +276,7 @@ public:
     const uint32_t* x = xs.limbs;
     const uint32_t* y = ys.limbs;
     uint32_t* r = rs.limbs;
-#ifndef TLC_IS_2
+#if CURVE_ID != 5
     return add_sub_u32_device<SUBTRACT, CARRY_OUT>(x, y, r, TLC);
 #else
     if (SUBTRACT & OVERFLOW_IN)
@@ -635,7 +635,7 @@ public:
    */
   static __device__ __forceinline__ void multiply_short_raw_device(const uint32_t* a, const uint32_t* b, uint32_t* even)
   {
-#ifndef TLC_IS_2
+#if CURVE_ID != 5
     __align__(16) uint32_t odd[TLC - 2];
     mul_n(even, a, b[0], TLC >> 1);
     mul_n(odd, a + 1, b[0], TLC >> 1);
@@ -745,7 +745,7 @@ public:
   static HOST_DEVICE_INLINE void multiply_raw(const ff_storage& as, const ff_storage& bs, ff_wide_storage& rs)
   {
 #ifdef __CUDA_ARCH__
-#ifndef TLC_IS_2
+#if CURVE_ID != 5
     return multiply_raw_device(as, bs, rs);
 #else
     return multiply_raw_device_tlc2(as, bs, rs);
@@ -837,7 +837,7 @@ public:
 
   friend HOST_DEVICE_INLINE Field operator+(Field xs, const Field& ys)
   {
-#ifndef TLC_IS_2
+#if CURVE_ID != 5
     Field rs = {};
     add_limbs<false>(xs.limbs_storage, ys.limbs_storage, rs.limbs_storage);
     return sub_modulus<1>(rs);
@@ -965,7 +965,7 @@ public:
   friend HOST_DEVICE_INLINE Field operator*(const Field& xs, const Field& ys)
   {
     Wide xy = mul_wide(xs, ys); // full mult
-#ifndef TLC_IS_2
+#if CURVE_ID != 5
     return reduce(xy); // reduce mod p
 #else
     Field reduce_res = reduce_tlc2(xy);
