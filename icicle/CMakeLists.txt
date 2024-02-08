@@ -67,7 +67,7 @@ set(CMAKE_CUDA_FLAGS_DEBUG "${CMAKE_CUDA_FLAGS_DEBUG} -g -G -O0")
 
 
 # when adding a new curve/field, append its name to the end of this list
-set(SUPPORTED_CURVES bn254;bls12_381;bls12_377;bw6_761)
+set(SUPPORTED_CURVES bn254;bls12_381;bls12_377;bw6_761;goldilocks)
 
 set(IS_CURVE_SUPPORTED FALSE)
 set(I 0)
@@ -76,6 +76,9 @@ foreach (SUPPORTED_CURVE ${SUPPORTED_CURVES})
   if (CURVE STREQUAL SUPPORTED_CURVE)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DCURVE_ID=${I}")
     set(IS_CURVE_SUPPORTED TRUE)
+  endif ()
+  if (CURVE STREQUAL "goldilocks")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DTLC_IS_2")
   endif ()
 endforeach()
 

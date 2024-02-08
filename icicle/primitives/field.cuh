@@ -221,6 +221,20 @@ public:
     }
   }
 
+  template <bool CARRY_OUT>
+  static constexpr __device__ __forceinline__ uint32_t sub_u32_with_overflow_device(
+    const uint32_t* x, const uint32_t* y, uint32_t* r, size_t n = (TLC >> 1), bool overflow = false)
+  {
+    r[0] = ptx::sub_cc(x[0], y[0]);
+    for (unsigned i = 1; i < (CARRY_OUT ? n : n - 1); i++)
+      r[i] = ptx::subc_cc(x[i], y[i]);
+    if (!CARRY_OUT) {
+      if (n > 1) r[n - 1] = ptx::subc(x[n - 1], y[n - 1]);
+      return 0;
+    }
+    return ptx::subc(overflow, 0);
+  }
+
   template <bool SUBTRACT, bool CARRY_OUT>
   static constexpr __device__ __forceinline__ uint32_t
   add_sub_u32_device(const uint32_t* x, const uint32_t* y, uint32_t* r, size_t n = (TLC >> 1))
@@ -229,58 +243,89 @@ public:
     for (unsigned i = 1; i < (CARRY_OUT ? n : n - 1); i++)
       r[i] = SUBTRACT ? ptx::subc_cc(x[i], y[i]) : ptx::addc_cc(x[i], y[i]);
     if (!CARRY_OUT) {
-      r[n - 1] = SUBTRACT ? ptx::subc(x[n - 1], y[n - 1]) : ptx::addc(x[n - 1], y[n - 1]);
+      if (n > 1) r[n - 1] = SUBTRACT ? ptx::subc(x[n - 1], y[n - 1]) : ptx::addc(x[n - 1], y[n - 1]);
       return 0;
     }
     return SUBTRACT ? ptx::subc(0, 0) : ptx::addc(0, 0);
   }
 
+  static constexpr DEVICE_INLINE void set_hi_bit_device(ff_storage& xs, uint32_t hi_bit)
+  {
+    xs.limbs[TLC - 1] |= (hi_bit & 1) << 31;
+  }
+
   // add or subtract limbs
-  template <bool SUBTRACT, bool CARRY_OUT>
+  template <bool SUBTRACT, bool CARRY_OUT, bool OVERFLOW_IN = false>
   static constexpr DEVICE_INLINE uint32_t
-  add_sub_limbs_device(const ff_storage& xs, const ff_storage& ys, ff_storage& rs)
+  add_sub_limbs_device(const ff_storage& xs, const ff_storage& ys, ff_storage& rs, bool optional_overflow = false)
   {
     const uint32_t* x = xs.limbs;
     const uint32_t* y = ys.limbs;
     uint32_t* r = rs.limbs;
+#ifndef TLC_IS_2
     return add_sub_u32_device<SUBTRACT, CARRY_OUT>(x, y, r, TLC);
+#else
+    if (SUBTRACT & OVERFLOW_IN)
+      return sub_u32_with_overflow_device<CARRY_OUT>(x, y, r, TLC, optional_overflow);
+    else
+      return add_sub_u32_device<SUBTRACT, CARRY_OUT>(x, y, r, TLC);
+#endif
   }
 
-  template <bool SUBTRACT, bool CARRY_OUT>
-  static constexpr DEVICE_INLINE uint32_t
-  add_sub_limbs_device(const ff_wide_storage& xs, const ff_wide_storage& ys, ff_wide_storage& rs)
+  template <bool SUBTRACT, bool CARRY_OUT, bool OVERFLOW_IN = false>
+  static constexpr DEVICE_INLINE uint32_t add_sub_limbs_device(
+    const ff_wide_storage& xs, const ff_wide_storage& ys, ff_wide_storage& rs, bool optional_overflow = false)
   {
+    // OVERFLOW_IN is still unsupported for wide storage
     const uint32_t* x = xs.limbs;
     const uint32_t* y = ys.limbs;
     uint32_t* r = rs.limbs;
     return add_sub_u32_device<SUBTRACT, CARRY_OUT>(x, y, r, 2 * TLC);
   }
 
-  template <bool SUBTRACT, bool CARRY_OUT>
-  static constexpr HOST_INLINE uint32_t add_sub_limbs_host(const ff_storage& xs, const ff_storage& ys, ff_storage& rs)
+  static constexpr HOST_INLINE void set_hi_bit_host(ff_storage& xs, uint32_t hi_bit)
+  {
+    xs.limbs[TLC - 1] |= (hi_bit & 1) << 31;
+  }
+
+  template <bool SUBTRACT, bool CARRY_OUT, bool OVERFLOW_IN = false>
+  static constexpr HOST_INLINE uint32_t
+  add_sub_limbs_host(const ff_storage& xs, const ff_storage& ys, ff_storage& rs, bool optional_overflow = false)
   {
     const uint32_t* x = xs.limbs;
     const uint32_t* y = ys.limbs;
     uint32_t* r = rs.limbs;
     uint32_t carry = 0;
-    host_math::carry_chain<TLC, false, CARRY_OUT> chain;
+    host_math::carry_chain<TLC + OVERFLOW_IN, false, CARRY_OUT> chain;
     for (unsigned i = 0; i < TLC; i++)
       r[i] = SUBTRACT ? chain.sub(x[i], y[i], carry) : chain.add(x[i], y[i], carry);
+    if (OVERFLOW_IN) chain.sub(optional_overflow, 0, carry);
     return CARRY_OUT ? carry : 0;
   }
 
-  template <bool SUBTRACT, bool CARRY_OUT>
-  static constexpr HOST_INLINE uint32_t
-  add_sub_limbs_host(const ff_wide_storage& xs, const ff_wide_storage& ys, ff_wide_storage& rs)
+  template <bool SUBTRACT, bool CARRY_OUT, bool OVERFLOW_IN = false>
+  static constexpr HOST_INLINE uint32_t add_sub_limbs_host(
+    const ff_wide_storage& xs, const ff_wide_storage& ys, ff_wide_storage& rs, bool optional_overflow = false)
   {
     const uint32_t* x = xs.limbs;
     const uint32_t* y = ys.limbs;
     uint32_t* r = rs.limbs;
     uint32_t carry = 0;
-    host_math::carry_chain<2 * TLC, false, CARRY_OUT> chain;
+    host_math::carry_chain<2 * TLC + OVERFLOW_IN, false, CARRY_OUT> chain;
     for (unsigned i = 0; i < 2 * TLC; i++)
       r[i] = SUBTRACT ? chain.sub(x[i], y[i], carry) : chain.add(x[i], y[i], carry);
+    if (OVERFLOW_IN) chain.sub(optional_overflow, 0, carry);
     return CARRY_OUT ? carry : 0;
+  }
+
+  template <typename T>
+  static constexpr HOST_DEVICE_INLINE void set_hi_bit(T& xs, uint32_t hi_bit)
+  {
+#ifdef __CUDA_ARCH__
+    set_hi_bit_device(xs, hi_bit);
+#else
+    set_hi_bit_host(xs, hi_bit);
+#endif
   }
 
   template <bool CARRY_OUT, typename T>
@@ -293,13 +338,13 @@ public:
 #endif
   }
 
-  template <bool CARRY_OUT, typename T>
-  static constexpr HOST_DEVICE_INLINE uint32_t sub_limbs(const T& xs, const T& ys, T& rs)
+  template <bool CARRY_OUT, bool OVERFLOW_IN = false, typename T>
+  static constexpr HOST_DEVICE_INLINE uint32_t sub_limbs(const T& xs, const T& ys, T& rs, bool optional_carry = false)
   {
 #ifdef __CUDA_ARCH__
-    return add_sub_limbs_device<true, CARRY_OUT>(xs, ys, rs);
+    return add_sub_limbs_device<true, CARRY_OUT, OVERFLOW_IN>(xs, ys, rs, optional_carry);
 #else
-    return add_sub_limbs_host<true, CARRY_OUT>(xs, ys, rs);
+    return add_sub_limbs_host<true, CARRY_OUT, OVERFLOW_IN>(xs, ys, rs, optional_carry);
 #endif
   }
 
@@ -519,6 +564,28 @@ public:
    * to the result which is written to `even`.
    *
    * It is used to compute the "middle" part of Karatsuba: \f$ a_{lo} \cdot b_{hi} + b_{lo} \cdot a_{hi} =
+   * (a_{hi} - a_{lo})(b_{lo} - b_{hi}) + a_{lo} \cdot b_{lo} + a_{hi} \cdot b_{hi} \f$. This method assumes
+   * that the top bit of \f$ a_{hi} \f$ and \f$ b_{hi} \f$ are probably set.
+   */
+  static __device__ __forceinline__ uint32_t multiply_and_add_short_raw_device_tlc2(
+    const uint32_t* a, const uint32_t* b, uint32_t* even, uint32_t* in1, uint32_t* in2)
+  {
+    // even = a*b+in1+in2
+    even[0] = ptx::mul_lo(a[0], b[0]);
+    even[1] = ptx::mul_hi(a[0], b[0]);
+    even[0] = ptx::add_cc(even[0], in1[0]);
+    even[1] = ptx::addc_cc(even[1], in1[1]);
+    even[2] = ptx::addc(0, 0);
+    even[0] = ptx::add_cc(even[0], in2[0]);
+    even[1] = ptx::addc_cc(even[1], in2[1]);
+    even[2] = ptx::addc(even[2], 0);
+  }
+
+  /**
+   * This method multiplies `a` and `b` (both assumed to have TLC / 2 limbs) and adds `in1` and `in2` (TLC limbs each)
+   * to the result which is written to `even`.
+   *
+   * It is used to compute the "middle" part of Karatsuba: \f$ a_{lo} \cdot b_{hi} + b_{lo} \cdot a_{hi} =
    * (a_{hi} - a_{lo})(b_{lo} - b_{hi}) + a_{lo} \cdot b_{lo} + a_{hi} \cdot b_{hi} \f$. Currently this method assumes
    * that the top bit of \f$ a_{hi} \f$ and \f$ b_{hi} \f$ are unset. This ensures correctness by allowing to keep the
    * result inside TLC limbs and ignore the carries from the highest limb.
@@ -554,6 +621,7 @@ public:
    */
   static __device__ __forceinline__ void multiply_short_raw_device(const uint32_t* a, const uint32_t* b, uint32_t* even)
   {
+#ifndef TLC_IS_2
     __align__(16) uint32_t odd[TLC - 2];
     mul_n(even, a, b[0], TLC >> 1);
     mul_n(odd, a + 1, b[0], TLC >> 1);
@@ -570,6 +638,10 @@ public:
     for (i = 1; i < TLC - 2; i++)
       even[i + 1] = ptx::addc_cc(even[i + 1], odd[i]);
     even[i + 1] = ptx::addc(even[i + 1], 0);
+#else
+    even[0] = ptx::mul_lo(a[0], b[0]);
+    even[1] = ptx::mul_hi(a[0], b[0]);
+#endif
   }
 
   /**
@@ -609,6 +681,40 @@ public:
       r[i] = ptx::addc_cc(r[i], 0);
   }
 
+  /**
+   * This method multiplies `as` and `bs` and writes the (wide) result into `rs`.
+   *
+   * It is assumed that the highest bits of `as` and `bs` are probably set. This method implements
+   * [subtractive Karatsuba](https://en.wikipedia.org/wiki/Karatsuba_algorithm#Implementation).
+   */
+  static DEVICE_INLINE void multiply_raw_device_tlc2(const ff_storage& as, const ff_storage& bs, ff_wide_storage& rs)
+  {
+    const uint32_t* a = as.limbs;
+    const uint32_t* b = bs.limbs;
+    uint32_t* r = rs.limbs;
+    // Next two lines multiply high and low halves of operands (\f$ a_{lo} \cdot b_{lo}; a_{hi} \cdot b_{hi} \$f) and
+    // write the results into `r`.
+    multiply_short_raw_device(a, b, r);
+    multiply_short_raw_device(&a[1], &b[1], &r[TLC]);
+    __align__(16) uint32_t middle_part[TLC + 1];
+    __align__(16) uint32_t diffs1[TLC];
+    __align__(16) uint32_t diffs2[TLC];
+    diffs1[1] = 0;
+    diffs2[1] = 0;
+    // Differences of halves \f$ a_{hi} - a_{lo}; b_{lo} - b_{hi} \$f are written into `diffs`, signs written to
+    // `carry1` and `carry2`.
+    uint32_t carry1 = add_sub_u32_device<true, true>(&a[1], a, diffs1);
+    uint32_t carry2 = add_sub_u32_device<true, true>(b, &b[1], diffs2);
+    // Compute the "middle part" of Karatsuba: \f$ a_{lo} \cdot b_{hi} + b_{lo} \cdot a_{hi} \f$.
+    multiply_and_add_short_raw_device_tlc2(diffs1, diffs2, middle_part, r, &r[TLC]);
+    // Corrections that need to be performed when differences are negative.
+    if (carry1) add_sub_u32_device<true, false>(&middle_part[1], diffs2, &middle_part[1], TLC);
+    if (carry2) add_sub_u32_device<true, false>(&middle_part[1], diffs1, &middle_part[1], TLC);
+    if (carry1 & carry2) middle_part[2] = ptx::add(middle_part[2], 1);
+    // Now that middle part is fully correct, it can be added to the result.
+    add_sub_u32_device<false, true>(&r[1], middle_part, &r[1], TLC + 1);
+  }
+
   static HOST_INLINE void multiply_raw_host(const ff_storage& as, const ff_storage& bs, ff_wide_storage& rs)
   {
     const uint32_t* a = as.limbs;
@@ -625,7 +731,11 @@ public:
   static HOST_DEVICE_INLINE void multiply_raw(const ff_storage& as, const ff_storage& bs, ff_wide_storage& rs)
   {
 #ifdef __CUDA_ARCH__
+#ifndef TLC_IS_2
     return multiply_raw_device(as, bs, rs);
+#else
+    return multiply_raw_device_tlc2(as, bs, rs);
+#endif
 #else
     return multiply_raw_host(as, bs, rs);
 #endif
@@ -689,13 +799,13 @@ public:
       out[i] = rand_host();
   }
 
-  template <unsigned REDUCTION_SIZE = 1>
-  static constexpr HOST_DEVICE_INLINE Field sub_modulus(const Field& xs)
+  template <unsigned REDUCTION_SIZE = 1, bool OVERFLOW_IN = false>
+  static constexpr HOST_DEVICE_INLINE Field sub_modulus(const Field& xs, bool optional_carry = false)
   {
     if (REDUCTION_SIZE == 0) return xs;
     const ff_storage modulus = get_modulus<REDUCTION_SIZE>();
     Field rs = {};
-    return sub_limbs<true>(xs.limbs_storage, modulus, rs.limbs_storage) ? xs : rs;
+    return sub_limbs<true, OVERFLOW_IN>(xs.limbs_storage, modulus, rs.limbs_storage, optional_carry) ? xs : rs;
   }
 
   friend std::ostream& operator<<(std::ostream& os, const Field& xs)
@@ -713,9 +823,15 @@ public:
 
   friend HOST_DEVICE_INLINE Field operator+(Field xs, const Field& ys)
   {
+#ifndef TLC_IS_2
     Field rs = {};
     add_limbs<false>(xs.limbs_storage, ys.limbs_storage, rs.limbs_storage);
     return sub_modulus<1>(rs);
+#else
+    Field rs = {};
+    uint32_t carry = add_limbs<true>(xs.limbs_storage, ys.limbs_storage, rs.limbs_storage);
+    return sub_modulus<1, true>(rs, carry);
+#endif
   }
 
   friend HOST_DEVICE_INLINE Field operator-(Field xs, const Field& ys)
@@ -790,10 +906,64 @@ public:
     return r;
   }
 
+  static constexpr HOST_DEVICE_INLINE Field reduce_tlc2(const Wide& xs)
+  {
+    const uint32_t* n0 = xs.limbs_storage.limbs;
+    const uint32_t* n1 = &xs.limbs_storage.limbs[2];
+    const uint32_t* n2 = &xs.limbs_storage.limbs[3];
+
+    ff_storage n0minusn2 = {};
+    const ff_storage modulus = get_modulus<1>();
+
+    uint32_t carry = 0;
+#ifdef __CUDA_ARCH__
+    n0minusn2.limbs[0] = ptx::sub_cc(n0[0], n2[0]);
+    n0minusn2.limbs[1] = ptx::subc_cc(n0[1], 0);
+    carry = ptx::subc(0, 0);
+    if (carry) add_sub_limbs_device<false, false>(n0minusn2, modulus, n0minusn2);
+#else
+    host_math::carry_chain<TLC, false, true> chain1;
+    n0minusn2.limbs[0] = chain1.sub(n0[0], n2[0], carry);
+    n0minusn2.limbs[1] = chain1.sub(n0[1], 0, carry);
+    if (carry) {
+      host_math::carry_chain<TLC, false, false> chain2;
+      carry = 0;
+      n0minusn2.limbs[0] = chain2.add(n0minusn2.limbs[0], modulus.limbs[0], carry);
+      n0minusn2.limbs[1] = chain2.add(n0minusn2.limbs[1], modulus.limbs[1], carry);
+    }
+#endif
+
+    // (2^32 - 1) n1
+    ff_storage sum = {};
+#ifdef __CUDA_ARCH__
+    sum.limbs[0] = ptx::sub_cc(0, n1[0]);
+    sum.limbs[1] = ptx::subc(n1[0], 0);
+    carry = add_sub_limbs_device<false, true>(sum, n0minusn2, sum);
+#else
+    host_math::carry_chain<TLC, false, false> chain;
+    carry = 0;
+    sum.limbs[0] = chain.sub(0, n1[0], carry);
+    sum.limbs[1] = chain.sub(n1[0], 0, carry);
+    carry = add_sub_limbs_host<false, true>(sum, n0minusn2, sum);
+#endif
+    ff_storage r = {};
+#ifdef __CUDA_ARCH__
+    carry = add_sub_limbs_device<true, true, true>(sum, modulus, r, carry);
+#else
+    carry = add_sub_limbs_host<true, true, true>(sum, modulus, r, carry);
+#endif
+    return carry ? Field{sum} : Field{r};
+  }
+
   friend HOST_DEVICE_INLINE Field operator*(const Field& xs, const Field& ys)
   {
     Wide xy = mul_wide(xs, ys); // full mult
-    return reduce(xy);          // reduce mod p
+#ifndef TLC_IS_2
+    return reduce(xy); // reduce mod p
+#else
+    Field reduce_res = reduce_tlc2(xy);
+    return reduce_res;
+#endif
   }
 
   friend HOST_DEVICE_INLINE bool operator==(const Field& xs, const Field& ys)
@@ -922,14 +1092,18 @@ public:
     Field c = {};
     while (!(u == one) && !(v == one)) {
       while (is_even(u)) {
+        uint32_t carry = 0;
         u = div2(u);
-        if (is_odd(b)) add_limbs<false>(b.limbs_storage, modulus, b.limbs_storage);
+        if (is_odd(b)) carry = add_limbs<true>(b.limbs_storage, modulus, b.limbs_storage);
         b = div2(b);
+        set_hi_bit(b.limbs_storage, carry);
       }
       while (is_even(v)) {
+        uint32_t carry = 0;
         v = div2(v);
-        if (is_odd(c)) add_limbs<false>(c.limbs_storage, modulus, c.limbs_storage);
+        if (is_odd(c)) carry = add_limbs<true>(c.limbs_storage, modulus, c.limbs_storage);
         c = div2(c);
+        set_hi_bit(c.limbs_storage, carry);
       }
       if (lt(v, u)) {
         u = u - v;

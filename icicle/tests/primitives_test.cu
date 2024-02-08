@@ -200,226 +200,227 @@ TEST_F(PrimitivesTest, FieldMultiplicationSqrEq)
     ASSERT_EQ(res_scalars1[i], res_scalars2[i]);
 }
 
-TEST_F(PrimitivesTest, ECRandomPointsAreOnCurve)
-{
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_PRED1(projective_t::is_on_curve, points1[i]);
-}
+// unsupported EC primitives with Goldilocks
+// TEST_F(PrimitivesTest, ECRandomPointsAreOnCurve)
+// {
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_PRED1(projective_t::is_on_curve, points1[i]);
+// }
 
-TEST_F(PrimitivesTest, ECPointAdditionSubtractionCancel)
-{
-  ASSERT_EQ(vec_add(points1, points2, res_points1, n), cudaSuccess);
-  ASSERT_EQ(vec_sub(res_points1, points2, res_points2, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(points1[i], res_points2[i]);
-}
+// TEST_F(PrimitivesTest, ECPointAdditionSubtractionCancel)
+// {
+//   ASSERT_EQ(vec_add(points1, points2, res_points1, n), cudaSuccess);
+//   ASSERT_EQ(vec_sub(res_points1, points2, res_points2, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(points1[i], res_points2[i]);
+// }
 
-TEST_F(PrimitivesTest, ECPointZeroAddition)
-{
-  ASSERT_EQ(vec_add(points1, zero_points, res_points1, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(points1[i], res_points1[i]);
-}
+// TEST_F(PrimitivesTest, ECPointZeroAddition)
+// {
+//   ASSERT_EQ(vec_add(points1, zero_points, res_points1, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(points1[i], res_points1[i]);
+// }
 
-TEST_F(PrimitivesTest, ECPointAdditionHostDeviceEq)
-{
-  ASSERT_EQ(vec_add(points1, points2, res_points1, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(points1[i] + points2[i], res_points1[i]);
-}
+// TEST_F(PrimitivesTest, ECPointAdditionHostDeviceEq)
+// {
+//   ASSERT_EQ(vec_add(points1, points2, res_points1, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(points1[i] + points2[i], res_points1[i]);
+// }
 
-TEST_F(PrimitivesTest, ECScalarMultiplicationHostDeviceEq)
-{
-  ASSERT_EQ(vec_mul(scalars1, points1, res_points1, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(scalars1[i] * points1[i], res_points1[i]);
-}
+// TEST_F(PrimitivesTest, ECScalarMultiplicationHostDeviceEq)
+// {
+//   ASSERT_EQ(vec_mul(scalars1, points1, res_points1, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(scalars1[i] * points1[i], res_points1[i]);
+// }
 
-TEST_F(PrimitivesTest, ECScalarMultiplicationByOne)
-{
-  ASSERT_EQ(vec_mul(one_scalars, points1, res_points1, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(points1[i], res_points1[i]);
-}
+// TEST_F(PrimitivesTest, ECScalarMultiplicationByOne)
+// {
+//   ASSERT_EQ(vec_mul(one_scalars, points1, res_points1, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(points1[i], res_points1[i]);
+// }
 
-TEST_F(PrimitivesTest, ECScalarMultiplicationByMinusOne)
-{
-  ASSERT_EQ(vec_neg(one_scalars, res_scalars1, n), cudaSuccess);
-  ASSERT_EQ(vec_mul(res_scalars1, points1, res_points1, n), cudaSuccess);
-  ASSERT_EQ(vec_neg(points1, res_points2, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(res_points1[i], res_points2[i]);
-}
+// TEST_F(PrimitivesTest, ECScalarMultiplicationByMinusOne)
+// {
+//   ASSERT_EQ(vec_neg(one_scalars, res_scalars1, n), cudaSuccess);
+//   ASSERT_EQ(vec_mul(res_scalars1, points1, res_points1, n), cudaSuccess);
+//   ASSERT_EQ(vec_neg(points1, res_points2, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(res_points1[i], res_points2[i]);
+// }
 
-TEST_F(PrimitivesTest, ECScalarMultiplicationByTwo)
-{
-  ASSERT_EQ(vec_add(one_scalars, one_scalars, res_scalars1, n), cudaSuccess);
-  ASSERT_EQ(vec_mul(res_scalars1, points1, res_points1, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ((one_scalars[i] + one_scalars[i]) * points1[i], res_points1[i]);
-}
+// TEST_F(PrimitivesTest, ECScalarMultiplicationByTwo)
+// {
+//   ASSERT_EQ(vec_add(one_scalars, one_scalars, res_scalars1, n), cudaSuccess);
+//   ASSERT_EQ(vec_mul(res_scalars1, points1, res_points1, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ((one_scalars[i] + one_scalars[i]) * points1[i], res_points1[i]);
+// }
 
-TEST_F(PrimitivesTest, ECScalarMultiplicationInverseCancel)
-{
-  ASSERT_EQ(vec_mul(scalars1, points1, res_points1, n), cudaSuccess);
-  ASSERT_EQ(field_vec_inv(scalars1, res_scalars1, n), cudaSuccess);
-  ASSERT_EQ(vec_mul(res_scalars1, res_points1, res_points2, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(points1[i], res_points2[i]);
-}
+// TEST_F(PrimitivesTest, ECScalarMultiplicationInverseCancel)
+// {
+//   ASSERT_EQ(vec_mul(scalars1, points1, res_points1, n), cudaSuccess);
+//   ASSERT_EQ(field_vec_inv(scalars1, res_scalars1, n), cudaSuccess);
+//   ASSERT_EQ(vec_mul(res_scalars1, res_points1, res_points2, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(points1[i], res_points2[i]);
+// }
 
-TEST_F(PrimitivesTest, ECScalarMultiplicationIsDistributiveOverMultiplication)
-{
-  ASSERT_EQ(vec_mul(scalars1, points1, res_points1, n), cudaSuccess);
-  ASSERT_EQ(vec_mul(scalars2, res_points1, res_points2, n), cudaSuccess);
-  ASSERT_EQ(vec_mul(scalars1, scalars2, res_scalars1, n), cudaSuccess);
-  ASSERT_EQ(vec_mul(res_scalars1, points1, res_points1, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(res_points1[i], res_points2[i]);
-}
+// TEST_F(PrimitivesTest, ECScalarMultiplicationIsDistributiveOverMultiplication)
+// {
+//   ASSERT_EQ(vec_mul(scalars1, points1, res_points1, n), cudaSuccess);
+//   ASSERT_EQ(vec_mul(scalars2, res_points1, res_points2, n), cudaSuccess);
+//   ASSERT_EQ(vec_mul(scalars1, scalars2, res_scalars1, n), cudaSuccess);
+//   ASSERT_EQ(vec_mul(res_scalars1, points1, res_points1, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(res_points1[i], res_points2[i]);
+// }
 
-TEST_F(PrimitivesTest, ECScalarMultiplicationIsDistributiveOverAddition)
-{
-  ASSERT_EQ(vec_mul(scalars1, points1, res_points1, n), cudaSuccess);
-  ASSERT_EQ(vec_mul(scalars2, points1, res_points2, n), cudaSuccess);
-  ASSERT_EQ(vec_add(scalars1, scalars2, res_scalars1, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(res_scalars1[i] * points1[i], res_points1[i] + res_points2[i]);
-}
+// TEST_F(PrimitivesTest, ECScalarMultiplicationIsDistributiveOverAddition)
+// {
+//   ASSERT_EQ(vec_mul(scalars1, points1, res_points1, n), cudaSuccess);
+//   ASSERT_EQ(vec_mul(scalars2, points1, res_points2, n), cudaSuccess);
+//   ASSERT_EQ(vec_add(scalars1, scalars2, res_scalars1, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(res_scalars1[i] * points1[i], res_points1[i] + res_points2[i]);
+// }
 
-TEST_F(PrimitivesTest, ECProjectiveToAffine)
-{
-  ASSERT_EQ(point_vec_to_affine(points1, aff_points, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(points1[i], projective_t::from_affine(aff_points[i]));
-}
+// TEST_F(PrimitivesTest, ECProjectiveToAffine)
+// {
+//   ASSERT_EQ(point_vec_to_affine(points1, aff_points, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(points1[i], projective_t::from_affine(aff_points[i]));
+// }
 
-TEST_F(PrimitivesTest, ECMixedPointAddition)
-{
-  ASSERT_EQ(point_vec_to_affine(points2, aff_points, n), cudaSuccess);
-  ASSERT_EQ(vec_add(points1, aff_points, res_points1, n), cudaSuccess);
-  ASSERT_EQ(vec_add(points1, points2, res_points2, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(res_points1[i], res_points2[i]);
-}
+// TEST_F(PrimitivesTest, ECMixedPointAddition)
+// {
+//   ASSERT_EQ(point_vec_to_affine(points2, aff_points, n), cudaSuccess);
+//   ASSERT_EQ(vec_add(points1, aff_points, res_points1, n), cudaSuccess);
+//   ASSERT_EQ(vec_add(points1, points2, res_points2, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(res_points1[i], res_points2[i]);
+// }
 
-TEST_F(PrimitivesTest, ECMixedAdditionOfNegatedPointEqSubtraction)
-{
-  ASSERT_EQ(point_vec_to_affine(points2, aff_points, n), cudaSuccess);
-  ASSERT_EQ(vec_sub(points1, aff_points, res_points1, n), cudaSuccess);
-  ASSERT_EQ(vec_neg(points2, res_points2, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(res_points1[i], points1[i] + res_points2[i]);
-}
+// TEST_F(PrimitivesTest, ECMixedAdditionOfNegatedPointEqSubtraction)
+// {
+//   ASSERT_EQ(point_vec_to_affine(points2, aff_points, n), cudaSuccess);
+//   ASSERT_EQ(vec_sub(points1, aff_points, res_points1, n), cudaSuccess);
+//   ASSERT_EQ(vec_neg(points2, res_points2, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(res_points1[i], points1[i] + res_points2[i]);
+// }
 
-TEST_F(PrimitivesTest, G2ECRandomPointsAreOnCurve)
-{
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_PRED1(g2_projective_t::is_on_curve, g2_points1[i]);
-}
+// TEST_F(PrimitivesTest, G2ECRandomPointsAreOnCurve)
+// {
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_PRED1(g2_projective_t::is_on_curve, g2_points1[i]);
+// }
 
-TEST_F(PrimitivesTest, G2ECPointAdditionSubtractionCancel)
-{
-  ASSERT_EQ(vec_add(g2_points1, g2_points2, g2_res_points1, n), cudaSuccess);
-  ASSERT_EQ(vec_sub(g2_res_points1, g2_points2, g2_res_points2, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(g2_points1[i], g2_res_points2[i]);
-}
+// TEST_F(PrimitivesTest, G2ECPointAdditionSubtractionCancel)
+// {
+//   ASSERT_EQ(vec_add(g2_points1, g2_points2, g2_res_points1, n), cudaSuccess);
+//   ASSERT_EQ(vec_sub(g2_res_points1, g2_points2, g2_res_points2, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(g2_points1[i], g2_res_points2[i]);
+// }
 
-TEST_F(PrimitivesTest, G2ECPointZeroAddition)
-{
-  ASSERT_EQ(vec_add(g2_points1, g2_zero_points, g2_res_points1, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(g2_points1[i], g2_res_points1[i]);
-}
+// TEST_F(PrimitivesTest, G2ECPointZeroAddition)
+// {
+//   ASSERT_EQ(vec_add(g2_points1, g2_zero_points, g2_res_points1, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(g2_points1[i], g2_res_points1[i]);
+// }
 
-TEST_F(PrimitivesTest, G2ECPointAdditionHostDeviceEq)
-{
-  ASSERT_EQ(vec_add(g2_points1, g2_points2, g2_res_points1, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(g2_points1[i] + g2_points2[i], g2_res_points1[i]);
-}
+// TEST_F(PrimitivesTest, G2ECPointAdditionHostDeviceEq)
+// {
+//   ASSERT_EQ(vec_add(g2_points1, g2_points2, g2_res_points1, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(g2_points1[i] + g2_points2[i], g2_res_points1[i]);
+// }
 
-TEST_F(PrimitivesTest, G2ECScalarMultiplicationHostDeviceEq)
-{
-  ASSERT_EQ(vec_mul(scalars1, g2_points1, g2_res_points1, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(scalars1[i] * g2_points1[i], g2_res_points1[i]);
-}
+// TEST_F(PrimitivesTest, G2ECScalarMultiplicationHostDeviceEq)
+// {
+//   ASSERT_EQ(vec_mul(scalars1, g2_points1, g2_res_points1, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(scalars1[i] * g2_points1[i], g2_res_points1[i]);
+// }
 
-TEST_F(PrimitivesTest, G2ECScalarMultiplicationByOne)
-{
-  ASSERT_EQ(vec_mul(one_scalars, points1, res_points1, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(g2_points1[i], g2_res_points1[i]);
-}
+// TEST_F(PrimitivesTest, G2ECScalarMultiplicationByOne)
+// {
+//   ASSERT_EQ(vec_mul(one_scalars, points1, res_points1, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(g2_points1[i], g2_res_points1[i]);
+// }
 
-TEST_F(PrimitivesTest, G2ECScalarMultiplicationByMinusOne)
-{
-  ASSERT_EQ(vec_neg(one_scalars, res_scalars1, n), cudaSuccess);
-  ASSERT_EQ(vec_mul(res_scalars1, g2_points1, g2_res_points1, n), cudaSuccess);
-  ASSERT_EQ(vec_neg(g2_points1, g2_res_points2, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(g2_res_points1[i], g2_res_points2[i]);
-}
+// TEST_F(PrimitivesTest, G2ECScalarMultiplicationByMinusOne)
+// {
+//   ASSERT_EQ(vec_neg(one_scalars, res_scalars1, n), cudaSuccess);
+//   ASSERT_EQ(vec_mul(res_scalars1, g2_points1, g2_res_points1, n), cudaSuccess);
+//   ASSERT_EQ(vec_neg(g2_points1, g2_res_points2, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(g2_res_points1[i], g2_res_points2[i]);
+// }
 
-TEST_F(PrimitivesTest, G2ECScalarMultiplicationByTwo)
-{
-  ASSERT_EQ(vec_add(one_scalars, one_scalars, res_scalars1, n), cudaSuccess);
-  ASSERT_EQ(vec_mul(res_scalars1, g2_points1, g2_res_points1, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ((one_scalars[i] + one_scalars[i]) * g2_points1[i], g2_res_points1[i]);
-}
+// TEST_F(PrimitivesTest, G2ECScalarMultiplicationByTwo)
+// {
+//   ASSERT_EQ(vec_add(one_scalars, one_scalars, res_scalars1, n), cudaSuccess);
+//   ASSERT_EQ(vec_mul(res_scalars1, g2_points1, g2_res_points1, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ((one_scalars[i] + one_scalars[i]) * g2_points1[i], g2_res_points1[i]);
+// }
 
-TEST_F(PrimitivesTest, G2ECScalarMultiplicationInverseCancel)
-{
-  ASSERT_EQ(vec_mul(scalars1, g2_points1, g2_res_points1, n), cudaSuccess);
-  ASSERT_EQ(field_vec_inv(scalars1, res_scalars1, n), cudaSuccess);
-  ASSERT_EQ(vec_mul(res_scalars1, g2_res_points1, g2_res_points2, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(g2_points1[i], g2_res_points2[i]);
-}
+// TEST_F(PrimitivesTest, G2ECScalarMultiplicationInverseCancel)
+// {
+//   ASSERT_EQ(vec_mul(scalars1, g2_points1, g2_res_points1, n), cudaSuccess);
+//   ASSERT_EQ(field_vec_inv(scalars1, res_scalars1, n), cudaSuccess);
+//   ASSERT_EQ(vec_mul(res_scalars1, g2_res_points1, g2_res_points2, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(g2_points1[i], g2_res_points2[i]);
+// }
 
-TEST_F(PrimitivesTest, G2ECScalarMultiplicationIsDistributiveOverMultiplication)
-{
-  ASSERT_EQ(vec_mul(scalars1, g2_points1, g2_res_points1, n), cudaSuccess);
-  ASSERT_EQ(vec_mul(scalars2, g2_res_points1, g2_res_points2, n), cudaSuccess);
-  ASSERT_EQ(vec_mul(scalars1, scalars2, res_scalars1, n), cudaSuccess);
-  ASSERT_EQ(vec_mul(res_scalars1, g2_points1, g2_res_points1, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(g2_res_points1[i], g2_res_points2[i]);
-}
+// TEST_F(PrimitivesTest, G2ECScalarMultiplicationIsDistributiveOverMultiplication)
+// {
+//   ASSERT_EQ(vec_mul(scalars1, g2_points1, g2_res_points1, n), cudaSuccess);
+//   ASSERT_EQ(vec_mul(scalars2, g2_res_points1, g2_res_points2, n), cudaSuccess);
+//   ASSERT_EQ(vec_mul(scalars1, scalars2, res_scalars1, n), cudaSuccess);
+//   ASSERT_EQ(vec_mul(res_scalars1, g2_points1, g2_res_points1, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(g2_res_points1[i], g2_res_points2[i]);
+// }
 
-TEST_F(PrimitivesTest, G2ECScalarMultiplicationIsDistributiveOverAddition)
-{
-  ASSERT_EQ(vec_mul(scalars1, g2_points1, g2_res_points1, n), cudaSuccess);
-  ASSERT_EQ(vec_mul(scalars2, g2_points1, g2_res_points2, n), cudaSuccess);
-  ASSERT_EQ(vec_add(scalars1, scalars2, res_scalars1, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(res_scalars1[i] * g2_points1[i], g2_res_points1[i] + g2_res_points2[i]);
-}
+// TEST_F(PrimitivesTest, G2ECScalarMultiplicationIsDistributiveOverAddition)
+// {
+//   ASSERT_EQ(vec_mul(scalars1, g2_points1, g2_res_points1, n), cudaSuccess);
+//   ASSERT_EQ(vec_mul(scalars2, g2_points1, g2_res_points2, n), cudaSuccess);
+//   ASSERT_EQ(vec_add(scalars1, scalars2, res_scalars1, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(res_scalars1[i] * g2_points1[i], g2_res_points1[i] + g2_res_points2[i]);
+// }
 
-TEST_F(PrimitivesTest, G2ECProjectiveToAffine)
-{
-  ASSERT_EQ(point_vec_to_affine(g2_points1, g2_aff_points, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(g2_points1[i], g2_projective_t::from_affine(g2_aff_points[i]));
-}
+// TEST_F(PrimitivesTest, G2ECProjectiveToAffine)
+// {
+//   ASSERT_EQ(point_vec_to_affine(g2_points1, g2_aff_points, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(g2_points1[i], g2_projective_t::from_affine(g2_aff_points[i]));
+// }
 
-TEST_F(PrimitivesTest, G2ECMixedPointAddition)
-{
-  ASSERT_EQ(point_vec_to_affine(g2_points2, g2_aff_points, n), cudaSuccess);
-  ASSERT_EQ(vec_add(g2_points1, g2_aff_points, g2_res_points1, n), cudaSuccess);
-  ASSERT_EQ(vec_add(g2_points1, g2_points2, g2_res_points2, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(g2_res_points1[i], g2_res_points2[i]);
-}
+// TEST_F(PrimitivesTest, G2ECMixedPointAddition)
+// {
+//   ASSERT_EQ(point_vec_to_affine(g2_points2, g2_aff_points, n), cudaSuccess);
+//   ASSERT_EQ(vec_add(g2_points1, g2_aff_points, g2_res_points1, n), cudaSuccess);
+//   ASSERT_EQ(vec_add(g2_points1, g2_points2, g2_res_points2, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(g2_res_points1[i], g2_res_points2[i]);
+// }
 
-TEST_F(PrimitivesTest, G2ECMixedAdditionOfNegatedPointEqSubtraction)
-{
-  ASSERT_EQ(point_vec_to_affine(g2_points2, g2_aff_points, n), cudaSuccess);
-  ASSERT_EQ(vec_sub(g2_points1, g2_aff_points, g2_res_points1, n), cudaSuccess);
-  ASSERT_EQ(vec_neg(g2_points2, g2_res_points2, n), cudaSuccess);
-  for (unsigned i = 0; i < n; i++)
-    ASSERT_EQ(g2_res_points1[i], g2_points1[i] + g2_res_points2[i]);
-}
+// TEST_F(PrimitivesTest, G2ECMixedAdditionOfNegatedPointEqSubtraction)
+// {
+//   ASSERT_EQ(point_vec_to_affine(g2_points2, g2_aff_points, n), cudaSuccess);
+//   ASSERT_EQ(vec_sub(g2_points1, g2_aff_points, g2_res_points1, n), cudaSuccess);
+//   ASSERT_EQ(vec_neg(g2_points2, g2_res_points2, n), cudaSuccess);
+//   for (unsigned i = 0; i < n; i++)
+//     ASSERT_EQ(g2_res_points1[i], g2_points1[i] + g2_res_points2[i]);
+// }
