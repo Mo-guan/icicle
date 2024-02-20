@@ -30,6 +30,7 @@ namespace poseidon {
     states[idx] = prepared_element;
   }
 
+#if CURVE_ID != 5
   template <typename S>
   __device__ __forceinline__ S sbox_alpha_five(S element)
   {
@@ -163,6 +164,198 @@ namespace poseidon {
 
     out[idx] = states[idx * T + 1];
   }
+#else
+  template <typename S>
+  __device__ __forceinline__ S sbox_alpha_seven(S x)
+  {
+    S x2 = S::sqr(x);
+    S x4 = S::sqr(x2);
+    S x3 = x2 * x;
+    return x3 * x4;
+  }
+
+  template <typename S, int T>
+  __device__ S
+  mds_row_shf(S element, S* mds_matrix_circ, S* mds_matrix_diag, int element_number, int vec_number, S* shared_states)
+  {
+    // S::print_debug("element_wide a = ", element, 2, "\n");
+    // S::print_debug("element_wide b = ", mds_matrix_diag[element_number], 2, "\n");
+    typename S::Wide element_wide{}; // = S::mul_wide(element, mds_matrix_diag[element_number]);
+
+    __syncthreads();
+    shared_states[threadIdx.x] = element;
+    __syncthreads();
+
+#pragma unroll
+    for (int i = 0; i < T; i++) {
+      // S::print_debug("element_wide a = ", shared_states[vec_number * T + (i + element_number) % T], 2, "\n");
+      // S::print_debug("element_wide b = ", mds_matrix_circ[i], 2, "\n");
+      element_wide =
+        element_wide + S::mul_wide(shared_states[vec_number * T + (i + element_number) % T], mds_matrix_circ[i]);
+      // S::print_debug("element_wide = ", element_wide, 4, "\n");
+    }
+    element_wide = element_wide + S::mul_wide(element, mds_matrix_diag[element_number]);
+    S::print_debug("element_wide before reduce = ", element_wide, 4, "\n");
+    S res = S::reduce96(element_wide);
+    S::print_debug("element_wide after reduce = ", res, 2, "\n");
+    return res;
+  }
+
+  template <typename S, int T>
+  __device__ void print_states_device(S* states)
+  {
+    printf("states: ");
+    for (int i = 0; i < T; i++) {
+      S::print_debug("", states[i], 2, ", ");
+    }
+    printf("\n");
+  }
+
+  template <typename S, int T>
+  __global__ void print_states(S* states)
+  {
+    printf("states: ");
+    for (int i = 0; i < T; i++) {
+      S::print_debug("", states[i], 2, ", ");
+    }
+    printf("\n");
+  }
+
+  template <typename S, int T>
+  __device__ S full_round(
+    S element,
+    size_t rc_offset,
+    int local_state_number,
+    int element_number,
+    S* shared_states,
+    const PoseidonConstants<S>& constants)
+  {
+    // S::print_debug("element = ", element, 2, "\n");
+    S::print_debug("all_round_constants = ", constants.all_round_constants[rc_offset * T + element_number], 2, "\n");
+    element = element + constants.all_round_constants[rc_offset * T + element_number];
+    S::print_debug("element = ", element, 2, "\n");
+    element = sbox_alpha_seven(element);
+    // S::print_debug("element = ", element, 2, "\n");
+
+    // Multiply all the states by mds matrix
+    S* mds_matrix_circ = constants.mds_matrix_circ;
+    S* mds_matrix_diag = constants.mds_matrix_diag;
+    S result =
+      mds_row_shf<S, T>(element, mds_matrix_circ, mds_matrix_diag, element_number, local_state_number, shared_states);
+    // S::print_debug("result = ", result, 2, "\n");
+    return result;
+  }
+
+  template <typename S, int T>
+  __global__ void
+  full_rounds(S* states, size_t number_of_states, size_t rc_offset, const PoseidonConstants<S> constants)
+  {
+    extern __shared__ S shared_states[];
+
+    int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    int state_number = idx / T;
+    if (state_number >= number_of_states) { return; }
+    // printf("state_number %d\n", state_number);
+    // printf("T %d\n", T);
+    // printf("number_of_states %d\n", number_of_states);
+    // printf("full_rounds\n");
+    int local_state_number = threadIdx.x / T;
+    int element_number = idx % T;
+
+    // printf("full_rounds 0\n");
+    S new_el = states[idx];
+    // printf("full_rounds 1\n");
+    for (int i = 0; i < constants.full_rounds_half; i++) {
+      printf("state[%d] = 0x%08x%08x\n", idx, new_el.limbs_storage.limbs[1], new_el.limbs_storage.limbs[0]);
+      new_el = full_round<S, T>(new_el, rc_offset, local_state_number, element_number, shared_states, constants);
+      // printf("full_rounds 2\n");
+      rc_offset += 1;
+    }
+    // printf("full_rounds 3\n");
+    states[idx] = new_el;
+    // printf("full_rounds done\n");
+  }
+
+  template <typename S, int T>
+  __device__ S partial_round(S state[T], int round_number, const PoseidonConstants<S>& constants)
+  {
+    S element = state[0];
+    element = sbox_alpha_seven(element);
+    element = element + constants.fast_partial_round_constants[round_number];
+
+    typename S::U160 d_sum{};
+
+#pragma unroll
+    for (int i = 1; i < T; i++) {
+      S t = constants.fast_partial_round_w_hats[round_number * constants.fast_partial_round_w_hats_len_y + i - 1];
+      S::add_limbs_device(d_sum.limbs_storage, S::mul_wide(t, state[i]).limbs_storage, d_sum.limbs_storage);
+    }
+    S mds0to0 = S::from(constants.mds0to0);
+    S::add_limbs_device(d_sum.limbs_storage, S::mul_wide(mds0to0, element).limbs_storage, d_sum.limbs_storage);
+
+#pragma unroll
+    for (int i = 1; i < T; i++) {
+      state[i] =
+        state[i] +
+        (element * constants.fast_partial_round_vs[(round_number * constants.fast_partial_round_vs_len_y) + (i - 1)]);
+    }
+    S::print_debug("d_sum = ", d_sum, 5, "\n");
+    state[0] = S::reduce160(d_sum);
+  }
+
+  template <typename S, int T>
+  __global__ void partial_rounds(S* states, size_t number_of_states, const PoseidonConstants<S> constants)
+  {
+    int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    if (idx >= number_of_states) { return; }
+
+    S state[T];
+#pragma unroll
+    for (int i = 0; i < T; i++) {
+      state[i] = states[idx * T + i] + constants.fast_partial_first_round_constant[i];
+    }
+    printf("add constant ");
+    print_states_device<S, T>(state);
+
+    S state_mds[T];
+    state_mds[0] = state[0];
+
+#pragma unroll
+    for (int r = 1; r < T; r++) {
+      for (int c = 1; c < T; c++) {
+        S t = constants
+                .fast_partial_round_initial_matrix[(r - 1) * constants.fast_partial_round_initial_matrix_len_y + c - 1];
+        state_mds[c] = state_mds[c] + state[r] * t;
+      }
+    }
+
+    printf("mds ");
+    print_states_device<S, T>(state_mds);
+
+    printf("constants.partial_rounds %d \n", constants.partial_rounds);
+    for (int i = 0; i < constants.partial_rounds; i++) {
+      partial_round<S, T>(state_mds, i, constants);
+      print_states_device<S, T>(state_mds);
+    }
+
+#pragma unroll
+    for (int i = 0; i < T; i++) {
+      states[idx * T + i] = state_mds[i];
+    }
+  }
+
+  // These function is just doing copy from the states to the output
+  template <typename S, int T>
+  __global__ void get_hash_results(S* states, size_t number_of_states, S* out)
+  {
+    int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    if (idx >= number_of_states) { return; }
+
+    for (int i = 0; i < 4; i++) {
+      out[idx * 4 + i] = states[idx * T + i];
+    }
+  }
+#endif
 
   template <typename S, int T>
   __global__ void copy_recursive(S* state, size_t number_of_states, S* out)

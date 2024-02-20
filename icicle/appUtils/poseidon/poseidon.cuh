@@ -24,6 +24,7 @@ namespace poseidon {
    */
   const int FULL_ROUNDS_DEFAULT = 4;
 
+#if CURVE_ID != 5
   /**
    * @struct PoseidonConstants
    * This constants are enough to define a Poseidon instantce
@@ -43,7 +44,27 @@ namespace poseidon {
     S* sparse_matrices = nullptr;
     S domain_tag;
   };
+#else
+  template <typename S>
+  struct PoseidonConstants {
+    int arity;
+    int partial_rounds;
+    int full_rounds_half;
+    S* all_round_constants = nullptr;
+    S* mds_matrix_circ = nullptr;
+    S* mds_matrix_diag = nullptr;
+    S* fast_partial_first_round_constant = nullptr;
+    S* fast_partial_round_initial_matrix = nullptr;
+    S* fast_partial_round_constants = nullptr;
+    S* fast_partial_round_w_hats = nullptr;
+    S* fast_partial_round_vs = nullptr;
+    int mds0to0;
 
+    int fast_partial_round_initial_matrix_len_y;
+    int fast_partial_round_w_hats_len_y;
+    int fast_partial_round_vs_len_y;
+  };
+#endif
   /**
    * @class PoseidonKernelsConfiguration
    * Describes the logic of deriving CUDA kernels parameters

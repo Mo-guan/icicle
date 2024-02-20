@@ -36,8 +36,30 @@ template <class CONFIG>
 class Field
 {
 public:
+#if CURVE_ID == 5
+  static constexpr unsigned EPSILON = 0xFFFFFFFF;
+#endif
   static constexpr unsigned TLC = CONFIG::limbs_count;
   static constexpr unsigned NBITS = CONFIG::modulus_bit_count;
+
+  /**
+   * @brief A macro used to specify a function or method that can be called from both host and device code.
+   *
+   * Functions or methods marked with this macro can be called from both host and device code,
+   * allowing for efficient code execution on both CPU and GPU.
+   */
+  template <typename T>
+  static constexpr HOST_DEVICE_INLINE void print_debug(char* name, T xs, int n, char* end = "\n")
+  {
+    if (n == 1)
+      printf("%s0x%08x%s", name, xs.limbs_storage.limbs[0], end);
+    else if (n == 2)
+      printf("%s0x%08x%08x%s", name, xs.limbs_storage.limbs[1], xs.limbs_storage.limbs[0], end);
+    else if (n == 4)
+      printf(
+        "%s0x%08x%08x%08x%08x%s", name, xs.limbs_storage.limbs[3], xs.limbs_storage.limbs[2], xs.limbs_storage.limbs[1],
+        xs.limbs_storage.limbs[0], end);
+  }
 
   static constexpr HOST_DEVICE_INLINE Field zero() { return Field{CONFIG::zero}; }
 
@@ -102,7 +124,9 @@ public:
   // private:
   typedef storage<TLC> ff_storage;
   typedef storage<2 * TLC> ff_wide_storage;
-
+#if CURVE_ID == 5
+  typedef storage<5> ff_storage_5;
+#endif
   /**
    * A new addition to the config file - \f$ 2^{32 \cdot num\_limbs} - p \f$.
    */
@@ -193,6 +217,61 @@ public:
       return rs;
     }
   };
+
+#if CURVE_ID == 5
+  struct U160 {
+    ff_storage_5 limbs_storage;
+
+    static constexpr Field DEVICE_INLINE n_lo_hi(const U160& xs)
+    {
+      Field out{};
+#ifdef __CUDA_ARCH__
+#pragma unroll
+#endif
+      for (unsigned i = 0; i < TLC; i++)
+        out.limbs_storage.limbs[i] = xs.limbs_storage.limbs[i + TLC];
+      return out;
+    }
+
+    static constexpr Field DEVICE_INLINE n_lo_lo(const U160& xs)
+    {
+      Field out{};
+#ifdef __CUDA_ARCH__
+#pragma unroll
+#endif
+      for (unsigned i = 0; i < TLC; i++)
+        out.limbs_storage.limbs[i] = xs.limbs_storage.limbs[i];
+      return out;
+    }
+
+    static constexpr Field DEVICE_INLINE reduced_hi(const U160& xs)
+    {
+      const uint32_t* xs_limbs = xs.limbs_storage.limbs;
+      Field t1{};
+      t1.limbs_storage.limbs[0] = ptx::mul_lo(xs_limbs[4], EPSILON);
+      t1.limbs_storage.limbs[1] = ptx::mul_hi(xs_limbs[4], EPSILON);
+      return t1 + n_lo_hi(xs);
+    }
+
+    static constexpr Wide DEVICE_INLINE reduced128(const U160& xs)
+    {
+      Wide out{};
+      Field hi = reduced_hi(xs);
+      Field lo = n_lo_lo(xs);
+#ifdef __CUDA_ARCH__
+#pragma unroll
+#endif
+      for (unsigned i = 0; i < TLC; i++)
+        out.limbs_storage.limbs[i] = lo.limbs_storage.limbs[i];
+#ifdef __CUDA_ARCH__
+#pragma unroll
+#endif
+      for (unsigned i = 0; i < TLC; i++)
+        out.limbs_storage.limbs[i + TLC] = hi.limbs_storage.limbs[i];
+      return out;
+    }
+  };
+#endif
 
   // return modulus multiplied by 1, 2 or 4
   template <unsigned MULTIPLIER = 1>
@@ -295,6 +374,18 @@ public:
     const uint32_t* y = ys.limbs;
     uint32_t* r = rs.limbs;
     return add_sub_u32_device<SUBTRACT, CARRY_OUT>(x, y, r, 2 * TLC);
+  }
+
+  static constexpr DEVICE_INLINE void
+  add_limbs_device(const ff_storage_5& xs, const ff_wide_storage& ys, ff_storage_5& rs)
+  {
+    const uint32_t* x = xs.limbs;
+    const uint32_t* y = ys.limbs;
+    uint32_t* r = rs.limbs;
+    r[0] = ptx::add_cc(x[0], y[0]);
+    for (unsigned i = 1; i < TLC * 2; i++)
+      r[i] = ptx::addc_cc(x[i], y[i]);
+    r[TLC * 2] = ptx::addc(x[TLC * 2], 0);
   }
 
   static constexpr HOST_INLINE void set_hi_bit_host(ff_storage& xs, uint32_t hi_bit)
@@ -913,6 +1004,20 @@ public:
     return r;
   }
 
+  static constexpr DEVICE_INLINE Field reduce96(const Wide& xs)
+  {
+    Field t1;
+    Field t2;
+    const uint32_t* xs_limbs = xs.limbs_storage.limbs;
+
+    t1.limbs_storage.limbs[0] = ptx::mul_lo(xs_limbs[2], EPSILON);
+    t1.limbs_storage.limbs[1] = ptx::mul_hi(xs_limbs[2], EPSILON);
+    t2.limbs_storage.limbs[0] = xs_limbs[0];
+    t2.limbs_storage.limbs[1] = xs_limbs[1];
+
+    return t1 + t2;
+  }
+
   static constexpr HOST_DEVICE_INLINE Field reduce_tlc2(const Wide& xs)
   {
     const uint32_t* n0 = xs.limbs_storage.limbs;
@@ -960,6 +1065,12 @@ public:
     carry = add_sub_limbs_host<true, true, true>(sum, modulus, r, carry);
 #endif
     return carry ? Field{sum} : Field{r};
+  }
+
+  static constexpr HOST_DEVICE_INLINE Field reduce160(const U160& xs)
+  {
+    Wide xs_wide = U160::reduced128(xs);
+    return reduce_tlc2(xs_wide);
   }
 
   friend HOST_DEVICE_INLINE Field operator*(const Field& xs, const Field& ys)
