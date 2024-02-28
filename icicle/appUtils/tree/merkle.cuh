@@ -9,6 +9,7 @@
 
 #include <iostream>
 #include <math.h>
+#include <assert.h>
 
 using namespace poseidon;
 

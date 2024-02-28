@@ -56,7 +56,7 @@ class FieldElement:
         return self.value != other.value
 
     def __repr__(self):
-        return str(self.value)
+        return '0x' + format(self.value, '016x')
 
     def __bytes__(self):
         return bytes(str(self).encode())
@@ -72,6 +72,9 @@ class FieldElement:
             return True
         else:
             return False
+
+    def assign(self, other):
+        self.value = other.value
 
 
 class Field:

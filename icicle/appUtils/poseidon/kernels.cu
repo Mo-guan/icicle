@@ -164,6 +164,15 @@ namespace poseidon {
 
     out[idx] = states[idx * T + 1];
   }
+
+  template <typename S, int T>
+  __global__ void copy_recursive(S* state, size_t number_of_states, S* out)
+  {
+    int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    if (idx >= number_of_states) { return; }
+
+    state[(idx / (T - 1) * T) + (idx % (T - 1)) + 1] = out[idx];
+  }
 #else
   template <typename S>
   __device__ __forceinline__ S sbox_alpha_seven(S x)
@@ -195,9 +204,9 @@ namespace poseidon {
       // S::print_debug("element_wide = ", element_wide, 4, "\n");
     }
     element_wide = element_wide + S::mul_wide(element, mds_matrix_diag[element_number]);
-    S::print_debug("element_wide before reduce = ", element_wide, 4, "\n");
+    // S::print_debug("element_wide before reduce = ", element_wide, 4, "\n");
     S res = S::reduce96(element_wide);
-    S::print_debug("element_wide after reduce = ", res, 2, "\n");
+    // S::print_debug("element_wide after reduce = ", res, 2, "\n");
     return res;
   }
 
@@ -212,13 +221,15 @@ namespace poseidon {
   }
 
   template <typename S, int T>
-  __global__ void print_states(S* states)
+  __global__ void print_states(S* states, size_t number_of_states)
   {
-    printf("states: ");
-    for (int i = 0; i < T; i++) {
-      S::print_debug("", states[i], 2, ", ");
+    for (int idx = 0; idx < number_of_states; idx++) {
+      printf("states %d : ", idx);
+      for (int i = 0; i < T; i++) {
+        S::print_debug("", states[idx * T + i], 2, ", ");
+      }
+      printf("\n");
     }
-    printf("\n");
   }
 
   template <typename S, int T>
@@ -231,9 +242,7 @@ namespace poseidon {
     const PoseidonConstants<S>& constants)
   {
     // S::print_debug("element = ", element, 2, "\n");
-    S::print_debug("all_round_constants = ", constants.all_round_constants[rc_offset * T + element_number], 2, "\n");
     element = element + constants.all_round_constants[rc_offset * T + element_number];
-    S::print_debug("element = ", element, 2, "\n");
     element = sbox_alpha_seven(element);
     // S::print_debug("element = ", element, 2, "\n");
 
@@ -266,7 +275,6 @@ namespace poseidon {
     S new_el = states[idx];
     // printf("full_rounds 1\n");
     for (int i = 0; i < constants.full_rounds_half; i++) {
-      printf("state[%d] = 0x%08x%08x\n", idx, new_el.limbs_storage.limbs[1], new_el.limbs_storage.limbs[0]);
       new_el = full_round<S, T>(new_el, rc_offset, local_state_number, element_number, shared_states, constants);
       // printf("full_rounds 2\n");
       rc_offset += 1;
@@ -299,7 +307,7 @@ namespace poseidon {
         state[i] +
         (element * constants.fast_partial_round_vs[(round_number * constants.fast_partial_round_vs_len_y) + (i - 1)]);
     }
-    S::print_debug("d_sum = ", d_sum, 5, "\n");
+    // S::print_debug("d_sum = ", d_sum, 5, "\n");
     state[0] = S::reduce160(d_sum);
   }
 
@@ -314,10 +322,8 @@ namespace poseidon {
     for (int i = 0; i < T; i++) {
       state[i] = states[idx * T + i] + constants.fast_partial_first_round_constant[i];
     }
-    printf("add constant ");
-    print_states_device<S, T>(state);
 
-    S state_mds[T];
+    S state_mds[T] = {};
     state_mds[0] = state[0];
 
 #pragma unroll
@@ -329,13 +335,8 @@ namespace poseidon {
       }
     }
 
-    printf("mds ");
-    print_states_device<S, T>(state_mds);
-
-    printf("constants.partial_rounds %d \n", constants.partial_rounds);
     for (int i = 0; i < constants.partial_rounds; i++) {
       partial_round<S, T>(state_mds, i, constants);
-      print_states_device<S, T>(state_mds);
     }
 
 #pragma unroll
@@ -355,7 +356,6 @@ namespace poseidon {
       out[idx * 4 + i] = states[idx * T + i];
     }
   }
-#endif
 
   template <typename S, int T>
   __global__ void copy_recursive(S* state, size_t number_of_states, S* out)
@@ -363,6 +363,12 @@ namespace poseidon {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
     if (idx >= number_of_states) { return; }
 
-    state[(idx / (T - 1) * T) + (idx % (T - 1)) + 1] = out[idx];
+    for (int j = 0; j < 12; j++) {
+      if (j < 8)
+        state[idx * 12 + j] = out[idx * 8 + j];
+      else
+        state[idx * 12 + j] = S::zero();
+    }
   }
+#endif
 } // namespace poseidon

@@ -90,23 +90,22 @@ namespace poseidon {
   cudaError_t
   permute_many(S* states, size_t number_of_states, const PoseidonConstants<S>& constants, cudaStream_t& stream)
   {
+    checkaa<2><<<1, 2>>>();
+    checkbb<<<1, 3, 0, stream>>>(11);
+    // printf("before permute_many\n");
+    // print_states<S, T><<<1, 1, 0, stream>>>(states, number_of_states);
     size_t rc_offset = 0;
     full_rounds<S, T><<<
       PKC<T>::number_of_full_blocks(number_of_states), PKC<T>::number_of_threads,
       sizeof(S) * PKC<T>::hashes_per_block * T, stream>>>(states, number_of_states, rc_offset, constants);
     rc_offset += constants.full_rounds_half;
-    // printf("before partial_rounds");
-    // print_states<S, T><<<1, 1, 0, stream>>>(states);
     partial_rounds<S, T>
       <<<PKC<T>::number_of_singlehash_blocks(number_of_states), PKC<T>::singlehash_block_size, 0, stream>>>(
         states, number_of_states, constants);
-    // printf("after partial_rounds");
-    // print_states<S, T><<<1, 1, 0, stream>>>(states);
     rc_offset += constants.partial_rounds;
     full_rounds<S, T><<<
       PKC<T>::number_of_full_blocks(number_of_states), PKC<T>::number_of_threads,
       sizeof(S) * PKC<T>::hashes_per_block * T, stream>>>(states, number_of_states, rc_offset, constants);
-
     return CHK_LAST();
   }
 
@@ -122,14 +121,7 @@ namespace poseidon {
     } else {
       // allocate memory for {number_of_states} states of {t} scalars each
       CHK_IF_RETURN(cudaMallocAsync(&states, number_of_states * T * sizeof(S), stream))
-
-      // This is where the input matrix of size Arity x NumberOfBlocks is
-      // padded and copied to device in a T x NumberOfBlocks matrix
-      CHK_IF_RETURN(cudaMemcpy2DAsync(
-        states, T * sizeof(S),           // Device pointer and device pitch
-        input, T * sizeof(S),            // Host pointer and pitch
-        T * sizeof(S), number_of_states, // Size of the source matrix (Arity x NumberOfBlocks)
-        cudaMemcpyHostToDevice, stream));
+      CHK_IF_RETURN(cudaMemcpyAsync(states, input, T * sizeof(S) * number_of_states, cudaMemcpyHostToDevice, stream));
     }
 
     S* output_device;
@@ -139,14 +131,18 @@ namespace poseidon {
       CHK_IF_RETURN(cudaMallocAsync(&output_device, number_of_states * sizeof(S) * 4, stream))
     }
 
-    printf("permute_many\n");
     cudaError_t hash_error = permute_many<S, T>(states, number_of_states, constants, stream);
     CHK_IF_RETURN(hash_error);
-    printf("permute_many done\n");
 
     get_hash_results<S, T>
       <<<PKC<T>::number_of_singlehash_blocks(number_of_states), PKC<T>::singlehash_block_size, 0, stream>>>(
         states, number_of_states, output_device);
+
+    if (config.loop_state) {
+      copy_recursive<S, T>
+        <<<PKC<T>::number_of_singlehash_blocks(number_of_states / 2), PKC<T>::singlehash_block_size, 0, stream>>>(
+          states, number_of_states / 2, output_device);
+    }
 
     if (!config.input_is_a_state) CHK_IF_RETURN(cudaFreeAsync(states, stream));
 
