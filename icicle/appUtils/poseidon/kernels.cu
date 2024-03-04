@@ -352,9 +352,7 @@ namespace poseidon {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
     if (idx >= number_of_states) { return; }
 
-    for (int i = 0; i < 4; i++) {
-      out[idx * 4 + i] = states[idx * T + i];
-    }
+    out[idx] = states[(idx >> 2) * T + (idx & 0x3)];
   }
 
   template <typename S, int T>
@@ -363,12 +361,16 @@ namespace poseidon {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
     if (idx >= number_of_states) { return; }
 
-    for (int j = 0; j < 12; j++) {
-      if (j < 8)
-        state[idx * 12 + j] = out[idx * 8 + j];
-      else
-        state[idx * 12 + j] = S::zero();
-    }
+    state[(idx >> 3) * T + (idx & 0x7)] = out[idx];
+  }
+
+  template <typename S, int T>
+  __global__ void set_recursive(S* state, size_t number_of_states)
+  {
+    int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    if (idx >= number_of_states) { return; }
+
+    state[(idx >> 2) * T + 8 + (idx & 0x3)] = S::zero();
   }
 #endif
 } // namespace poseidon

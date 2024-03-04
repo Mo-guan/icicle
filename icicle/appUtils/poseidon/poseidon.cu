@@ -90,8 +90,6 @@ namespace poseidon {
   cudaError_t
   permute_many(S* states, size_t number_of_states, const PoseidonConstants<S>& constants, cudaStream_t& stream)
   {
-    checkaa<2><<<1, 2>>>();
-    checkbb<<<1, 3, 0, stream>>>(11);
     // printf("before permute_many\n");
     // print_states<S, T><<<1, 1, 0, stream>>>(states, number_of_states);
     size_t rc_offset = 0;
@@ -135,13 +133,16 @@ namespace poseidon {
     CHK_IF_RETURN(hash_error);
 
     get_hash_results<S, T>
-      <<<PKC<T>::number_of_singlehash_blocks(number_of_states), PKC<T>::singlehash_block_size, 0, stream>>>(
-        states, number_of_states, output_device);
+      <<<PKC<T>::number_of_singlehash_blocks(number_of_states) * 4, PKC<T>::singlehash_block_size, 0, stream>>>(
+        states, number_of_states * 4, output_device);
 
     if (config.loop_state) {
       copy_recursive<S, T>
-        <<<PKC<T>::number_of_singlehash_blocks(number_of_states / 2), PKC<T>::singlehash_block_size, 0, stream>>>(
-          states, number_of_states / 2, output_device);
+        <<<PKC<T>::number_of_singlehash_blocks(number_of_states / 2) * 8, PKC<T>::singlehash_block_size, 0, stream>>>(
+          states, number_of_states / 2 * 8, output_device);
+      set_recursive<S, T>
+        <<<PKC<T>::number_of_singlehash_blocks(number_of_states / 2) * 4, PKC<T>::singlehash_block_size, 0, stream>>>(
+          states, number_of_states / 2 * 4);
     }
 
     if (!config.input_is_a_state) CHK_IF_RETURN(cudaFreeAsync(states, stream));
